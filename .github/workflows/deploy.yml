@@ -7,10 +7,10 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 108327187275
   ECR_REPOSITORY: backend-despacho
   ECS_CLUSTER: cluster-proyecto-semestral
   ECS_SERVICE: backend-despacho-service-44i8b17r
-  ECS_TASK_DEFINITION: backend-despacho
 
 jobs:
   deploy:
@@ -20,34 +20,44 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Spring Boot
+        run: mvn clean package -DskipTests
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build Docker Image
-        run: docker build -t backend-despacho .
+        run: |
+          docker build -t $ECR_REPOSITORY .
 
       - name: Tag Docker Image
         run: |
-          docker tag backend-despacho:latest \
-          108327187275.dkr.ecr.us-east-1.amazonaws.com/backend-despacho:latest
+          docker tag $ECR_REPOSITORY:latest \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
       - name: Push Docker Image
         run: |
           docker push \
-          108327187275.dkr.ecr.us-east-1.amazonaws.com/backend-despacho:latest
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
-      - name: Deploy to ECS
+      - name: Force new ECS Deployment
         run: |
           aws ecs update-service \
-            --cluster cluster-proyecto-semestral \
-            --service backend-despacho-service-44i8b17r \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
             --force-new-deployment
